@@ -1,21 +1,26 @@
 import numpy as np
 from astropy.io import fits
-import argparse
+import argparse, traceback, sys
 from riptide import TimeSeries, ffa_search, find_peaks
 import matplotlib.pyplot as plt
 
 
 def read_fits_file(fname):
-    f = fits.open(fname)
+    try:
+        f = fits.open(fname)
+    except:
+        #traceback.print_exc()
+        sys.exit(1)
     header = f[0].header
     data = f[0].data
 
     return header, data
 
 def search_data(data, header):
-    assert data.shape[:-1] == (header.npix, header.npix)
+    assert data.shape[1:] == (header['NAXIS1'], header['NAXIS2']), f"Data.shape = {data.shape}"
 
-    nsamples = data.shape[-1]
+    nsamples = data.shape[0]
+    npix = data.shape[1]
     data_len = nsamples * header['TSAMP']
 
     bins_min = 3
@@ -25,16 +30,17 @@ def search_data(data, header):
     Pmax = data_len / 2
 
     ducy_max = 0.5
-    rmed_width = 4 #seconds
+    rmed_width = 4.1 #seconds
 
     all_cands = []
     cand_locations = []
-    for lpix in range(data.shape[0]):
-        for mpix in range(data.shape[1]):
+    for lpix in range(130, 170, 1):
+        for mpix in range(130, 170, 1):
             print(f"Searching pix ({lpix}, {mpix})")
-            pixel_data = data[lpix, mpix]
+            pixel_data = data[:, lpix, mpix]
             pixel_time_series = TimeSeries(pixel_data, 
                                            tsamp = header['TSAMP'])
+            print("Tsamp = ", pixel_time_series.tsamp)
             ts_ffa, pgram = ffa_search(pixel_time_series,
                                             period_min=Pmin,
                                             period_max=Pmax,
@@ -50,8 +56,7 @@ def search_data(data, header):
                 print(f"Found {len(peaks)} cands in pixel ({lpix}, {mpix}).")
                 all_cands.append(peaks)
                 cand_locations.append([lpix, mpix])
-                plt.figure()
-                pgram.display()
+                #pgram.display()
             
 
     return all_cands, cand_locations
@@ -59,7 +64,12 @@ def search_data(data, header):
 def main():
     header, data = read_fits_file(args.fname)
     all_cands, cand_locations = search_data(data, header)
-    print(f"Len of all_cands = {len(all_cands)}.\n Done!")
+    print(f"Len of all_cands = {len(all_cands)}")
+    for icand in range(len(all_cands)):
+        print(f"icand = {icand}, cand_location={cand_locations[icand]}")
+        for ipeak in all_cands[icand]:
+            print(f"ipeak ={ipeak}")
+        print("--------")
 
 if __name__ == '__main__':
     a = argparse.ArgumentParser()
